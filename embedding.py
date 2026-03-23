@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 import warnings
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -105,8 +106,26 @@ class Embedder:
 
 		text_inputs = [chunk.content for chunk in chunks]
 		text_embeddings = self.model.encode(text_inputs, convert_to_numpy=True, normalize_embeddings=True)
-		return np.asarray(text_embeddings, dtype=np.float32)
+		embeddings = np.asarray(text_embeddings, dtype=np.float32)
+
+		sample_count = min(3, len(chunks))
+		if sample_count > 0:
+			sample_indices = sorted(random.sample(range(len(chunks)), k=sample_count))
+			print(f"[Embedder] chunks={len(chunks)}, embedding_dim={embeddings.shape[1]}")
+			print("[Embedder] 样例输入与向量预览：")
+			for idx in sample_indices:
+				preview = text_inputs[idx][:100].replace("\n", " ")
+				vector_preview = np.array2string(embeddings[idx][:8], precision=4, separator=", ")
+				print(f"  - idx={idx}, text='{preview}'")
+				print(f"    vec[:8]={vector_preview}")
+
+		return embeddings
 
 	def embed_query(self, query: str) -> np.ndarray:
 		vector = self.model.encode([query], convert_to_numpy=True, normalize_embeddings=True)
-		return np.asarray(vector, dtype=np.float32)
+		result = np.asarray(vector, dtype=np.float32)
+		preview = query[:100].replace("\n", " ")
+		vector_preview = np.array2string(result[0][:8], precision=4, separator=", ")
+		print(f"[Embedder] query='{preview}'")
+		print(f"[Embedder] query_vec[:8]={vector_preview}")
+		return result

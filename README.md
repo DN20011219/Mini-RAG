@@ -50,13 +50,13 @@ export HF_ENDPOINT=https://hf-mirror.com
 ### 1) 建库
 
 ```bash
-python chat.py build
+python rag_chat.py build
 ```
 
 ### 2) 提问
 
 ```bash
-python chat.py query "你的问题" --top-k 3
+python rag_chat.py query "你的问题" --top-k 3
 ```
 
 top-k 参数用于控制使用前多少条检索结果增强回答。
@@ -64,19 +64,37 @@ top-k 参数用于控制使用前多少条检索结果增强回答。
 ### 3) 裸大模型问答（无RAG、无检索）
 
 ```bash
-python plain_chat.py "你的问题"
+python no_doc_chat.py "你的问题"
 ```
 
-用于和 `python chat.py query ...` 的 RAG 结果做直接对比。
+用于和 `python rag_chat.py query ...` 的 RAG 结果做直接对比。
+
+### 4) 将全部文档发送给大模型问答（无RAG、无检索）
+
+```bash
+python full_doc_chat.py "你的问题"
+```
+
+该脚本用于演示“全量文档直传”的典型问题：当文档过长时，接口容易因上下文超限而报错。
+
+脚本会打印：
+
+- 请求规模（chars/bytes/estimated_tokens）
+- GitHub Models/Copilot 的具体错误信息（若有）
 
 ### 总体示例：
 
 ```bash
 export HF_ENDPOINT=https://hf-mirror.com
-python chat.py build
-python chat.py query "你的问题" --top-k 3
-python plain_chat.py "你的问题"
+python rag_chat.py build
+python full_doc_chat.py "咖啡店营业时间是什么？"
+python rag_chat.py query "咖啡店营业时间是什么？" --top-k 3
 ```
+
+上面这组命令可直接作为教学演示：
+
+1. 先运行 `full_doc_chat.py`，观察长文档直传时的失败信息。
+2. 再运行 `rag_chat.py query`，观察“检索后再生成”的稳定回答。
 
 额外说明：
 
