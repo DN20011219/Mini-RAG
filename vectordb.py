@@ -22,12 +22,16 @@ class VectorDB:
 		db_dir: str | Path = "data/db_file",
 		index_name: str = "index.faiss",
 		metadata_name: str = "metadata.json",
+		nlist: int = 50,
+		nprobe: int = 30,
 	):
 		self.db_dir = Path(db_dir)
 		self.db_dir.mkdir(parents=True, exist_ok=True)
 
 		self.index_path = self.db_dir / index_name
 		self.metadata_path = self.db_dir / metadata_name
+		self.nlist = nlist
+		self.nprobe = nprobe
 
 		self.index: faiss.Index | None = None
 		self.metadata: list[dict] = []
@@ -36,9 +40,16 @@ class VectorDB:
 		if embeddings.size == 0 or not chunks:
 			raise ValueError("没有可建立索引的数据，请检查 data/ 是否有文本文件")
 
+		embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
 		dim = embeddings.shape[1]
-		index = faiss.IndexFlatIP(dim)
+		num_vectors = embeddings.shape[0]
+
+		quantizer = faiss.IndexFlatIP(dim)
+		nlist = max(1, min(self.nlist, num_vectors))
+		index = faiss.IndexIVFFlat(quantizer, dim, nlist, faiss.METRIC_INNER_PRODUCT)
+		index.train(embeddings)
 		index.add(embeddings)
+		index.nprobe = max(1, min(self.nprobe, nlist))
 
 		self.index = index
 		self.metadata = [chunk.to_dict() for chunk in chunks]
@@ -63,6 +74,9 @@ class VectorDB:
 	def search(self, query_vector: np.ndarray, top_k: int = 3) -> list[dict]:
 		if self.index is None:
 			raise RuntimeError("索引未加载")
+
+		if hasattr(self.index, "nprobe"):
+			self.index.nprobe = max(1, min(self.nprobe, self.index.nlist))
 
 		top_k = min(top_k, len(self.metadata))
 		scores, indices = self.index.search(query_vector, top_k)

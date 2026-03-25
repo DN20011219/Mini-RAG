@@ -4,7 +4,7 @@
 
 - LLM 接入：优先使用 GitHub API（GitHub Models，读取 `gh auth login` 登录态 token）调用对话接口；不可用时回退 Copilot token
 - Embedding：对 `data/doc` 下文本做向量化
-- VectorDB：使用 `faiss`，索引与元数据保存在 `data/db_file/`
+- VectorDB：使用 `faiss`，索引与元数据保存在 `data/db_file/`，索引使用 IVF-Flat，距离度量采用 METRIC_INNER_PRODUCT
 
 ## 环境依赖
 
