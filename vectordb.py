@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 
@@ -22,19 +23,34 @@ class VectorDB:
 		db_dir: str | Path = "data/db_file",
 		index_name: str = "index.faiss",
 		metadata_name: str = "metadata.json",
+		index_type: Literal["ivfflat", "ivfpq"] = "ivfflat",
 		nlist: int = 50,
 		nprobe: int = 30,
+		pq_m: int | None = None,
+		pq_nbits: int = 8,
 	):
 		self.db_dir = Path(db_dir)
 		self.db_dir.mkdir(parents=True, exist_ok=True)
 
 		self.index_path = self.db_dir / index_name
 		self.metadata_path = self.db_dir / metadata_name
+		if index_type not in {"ivfflat", "ivfpq"}:
+			raise ValueError("index_type 仅支持 'ivfflat' 或 'ivfpq'")
+		self.index_type = index_type
 		self.nlist = nlist
 		self.nprobe = nprobe
+		self.pq_m = pq_m
+		self.pq_nbits = pq_nbits
 
 		self.index: faiss.Index | None = None
 		self.metadata: list[dict] = []
+
+	@staticmethod
+	def _pick_pq_m(dim: int, preferred_m: int) -> int:
+		candidate = max(1, min(preferred_m, dim))
+		while candidate > 1 and dim % candidate != 0:
+			candidate -= 1
+		return candidate
 
 	def build(self, embeddings: np.ndarray, chunks: list[Chunk]) -> None:
 		if embeddings.size == 0 or not chunks:
@@ -46,7 +62,21 @@ class VectorDB:
 
 		quantizer = faiss.IndexFlatIP(dim)
 		nlist = max(1, min(self.nlist, num_vectors))
-		index = faiss.IndexIVFFlat(quantizer, dim, nlist, faiss.METRIC_INNER_PRODUCT)
+
+		if self.index_type == "ivfflat":
+			index = faiss.IndexIVFFlat(quantizer, dim, nlist, faiss.METRIC_INNER_PRODUCT)
+		else:
+			preferred_pq_m = self.pq_m if self.pq_m is not None else max(1, dim // 8)
+			pq_m = self._pick_pq_m(dim, preferred_pq_m)
+			index = faiss.IndexIVFPQ(
+				quantizer,
+				dim,
+				nlist,
+				pq_m,
+				self.pq_nbits,
+				faiss.METRIC_INNER_PRODUCT,
+			)
+
 		index.train(embeddings)
 		index.add(embeddings)
 		index.nprobe = max(1, min(self.nprobe, nlist))
@@ -97,6 +127,11 @@ def build_db(
 	model_name: str = "sentence-transformers/clip-ViT-B-32-multilingual-v1",
 	hf_endpoint: str | None = None,
 	local_files_only: bool = False,
+	index_type: Literal["ivfflat", "ivfpq"] = "ivfpq",
+	nlist: int = 50,
+	nprobe: int = 30,
+	pq_m: int | None = None,
+	pq_nbits: int = 8,
 ) -> tuple[int, int]:
 	embedder = Embedder(
 		model_name=model_name,
@@ -106,7 +141,67 @@ def build_db(
 	chunks = embedder.load_chunks(data_dir=data_dir)
 	embeddings = embedder.embed_chunks(chunks)
 
-	vectordb = VectorDB(db_dir=db_dir)
+	vectordb = VectorDB(
+		db_dir=db_dir,
+		index_type=index_type,
+		nlist=nlist,
+		nprobe=nprobe,
+		pq_m=pq_m,
+		pq_nbits=pq_nbits,
+	)
 	vectordb.build(embeddings=embeddings, chunks=chunks)
 	vectordb.save()
 	return len(chunks), embeddings.shape[1]
+
+
+def compare_ivf_index_sizes(
+	data_dir: str | Path = "data",
+	db_root_dir: str | Path = "data",
+	model_name: str = "sentence-transformers/clip-ViT-B-32-multilingual-v1",
+	hf_endpoint: str | None = None,
+	local_files_only: bool = False,
+	nlist: int = 50,
+	nprobe: int = 30,
+	pq_m: int | None = None,
+	pq_nbits: int = 8,
+) -> dict[str, float | int]:
+	embedder = Embedder(
+		model_name=model_name,
+		hf_endpoint=hf_endpoint,
+		local_files_only=local_files_only,
+	)
+	chunks = embedder.load_chunks(data_dir=data_dir)
+	embeddings = embedder.embed_chunks(chunks)
+
+	db_root = Path(db_root_dir)
+	flat_db = VectorDB(
+		db_dir=db_root / "db_file_ivfflat",
+		index_type="ivfflat",
+		nlist=nlist,
+		nprobe=nprobe,
+	)
+	pq_db = VectorDB(
+		db_dir=db_root / "db_file_ivfpq",
+		index_type="ivfpq",
+		nlist=nlist,
+		nprobe=nprobe,
+		pq_m=pq_m,
+		pq_nbits=pq_nbits,
+	)
+
+	flat_db.build(embeddings=embeddings, chunks=chunks)
+	flat_db.save()
+	pq_db.build(embeddings=embeddings, chunks=chunks)
+	pq_db.save()
+
+	flat_bytes = flat_db.index_path.stat().st_size
+	pq_bytes = pq_db.index_path.stat().st_size
+
+	return {
+		"num_vectors": int(embeddings.shape[0]),
+		"dimension": int(embeddings.shape[1]),
+		"ivfflat_bytes": int(flat_bytes),
+		"ivfpq_bytes": int(pq_bytes),
+		"ivfpq_ratio": float(pq_bytes / flat_bytes if flat_bytes else 0.0),
+		"saved_bytes": int(flat_bytes - pq_bytes),
+	}

@@ -4,7 +4,7 @@
 
 - LLM 接入：优先使用 GitHub API（GitHub Models，读取 `gh auth login` 登录态 token）调用对话接口；不可用时回退 Copilot token
 - Embedding：对 `data/doc` 下文本做向量化
-- VectorDB：使用 `faiss`，索引与元数据保存在 `data/db_file/`，索引使用 IVF-Flat，距离度量采用 METRIC_INNER_PRODUCT
+- VectorDB：使用 `faiss`，索引与元数据保存在 `data/db_file/`，索引默认使用 IVF-PQ，距离度量采用 METRIC_INNER_PRODUCT
 
 ## 环境依赖
 
@@ -102,3 +102,58 @@ python rag_chat.py query "咖啡店营业时间是什么？" --top-k 3
 - 如果 GitHub Models 不可用，会尝试 Copilot token
 - 如果拿不到 token，则自动退化为“检索结果摘要”模式（仍可验证 RAG 检索链路）
 
+
+### 其它功能
+
+#### 量化算法
+
+系统支持了 IVF-Flat 与 IVF-PQ 两种索引，其中 IVF-PQ 使用了 PQ 压缩向量。为了便于对比两类索引的差异，系统提供了对比脚本：
+
+```bash
+python compare_index.py
+```
+
+该脚本将根据 doc 内部文档和切分嵌入模块，构建 IVF-Flat 和 IVF-PQ 两类索引，并输出这两类索引的磁盘空间。
+
+当前版本会在同一查询集上同时对比两项指标：
+
+- 数据库层召回：以 `IndexFlatIP` 精确检索的 top-k 作为基准，计算 `IVF-Flat` 和 `IVF-PQ` 的 `avg_recall_at_k`
+- 索引存储空间：输出两类索引文件大小（bytes）、压缩比例（`ivfpq_ratio`）与节省空间（`saved_bytes`）
+
+说明：`pq_m` 为 `null` 表示使用默认策略（按向量维度自动设置为 `dim // 8`，再做可整除修正）。`pq_nbits` 默认每个子空间使用 8 bit 存储。
+
+如默认实验配置下，测试结果为：
+```json
+{
+  "query_count": 7,
+  "top_k": 3,
+  "nlist": 50,
+  "nprobe": 30,
+  "pq_m": null,
+  "pq_nbits": 8,
+  "storage": {
+    "ivfflat_index_bytes": 1357099,
+    "ivfpq_index_bytes": 671188,
+    "ivfpq_ratio": 0.494576,
+    "saved_bytes": 685911
+  },
+  "summary": {
+    "ivfflat": {
+      "avg_recall_at_k": 1.0
+    },
+    "ivfpq": {
+      "avg_recall_at_k": 0.8571
+    }
+  }
+}
+```
+
+其含义为：
+
+- 一共评测了 7 个查询问题（`query_count=7`），每次比较 top-3 结果（`top_k=3`）。
+- 倒排参数为 `nlist=50`、`nprobe=30`；`pq_m=null` 表示自动按 `dim // 8` 设定子空间数，`pq_nbits=8` 表示每个子空间 8 bit 编码。
+- `ivfflat_index_bytes=1357099` 与 `ivfpq_index_bytes=671188` 表示两类索引文件大小；`ivfpq_ratio=0.494576` 表示 IVF-PQ 大小约为 IVF-Flat 的 49.46%。
+- `saved_bytes=685911` 表示 IVF-PQ 相比 IVF-Flat 节省约 686 KB 存储空间。
+- `avg_recall_at_k` 表示数据库层平均召回：IVF-Flat 为 `1.0`（与精确检索 top-k 一致），IVF-PQ 为 `0.8571`（平均能命中约 85.71% 的精确检索 top-k）。
+
+这说明在当前数据规模与参数下，IVF-PQ 显著降低了索引体积，但会带来一定召回损失；可通过调大 `nprobe`、降低压缩强度（如减小 `pq_nbits` 或调整 `pq_m`）进一步权衡。
