@@ -1,12 +1,12 @@
 # 一个最简单的 RAG 系统
 
-## 系统设计
+## 1 系统设计
 
 - LLM 接入：优先使用 GitHub API（GitHub Models，读取 `gh auth login` 登录态 token）调用对话接口；不可用时回退 Copilot token
 - Embedding：对 `data/doc` 下文本做向量化
 - VectorDB：使用 `faiss`，索引与元数据保存在 `data/db_file/`，索引默认使用 IVF-PQ，距离度量采用 METRIC_INNER_PRODUCT
 
-## 环境依赖
+## 2 环境依赖
 
 使用 conda 管理虚拟环境，可跳过（推荐）：
 ```bash
@@ -41,19 +41,19 @@ export HF_ENDPOINT=https://hf-mirror.com
 
 若模型已提前下载到本地，可使用本地模式：`--local-files-only --model-name <本地模型目录>`。
 
-## 数据准备
+## 3 数据准备
 
 - 把所有文本数据放到 `data/doc`（支持 `.txt/.md/.markdown`）
 
-## 运行指南
+## 4 运行指南
 
-### 1) 建库
+### 4.1 建库
 
 ```bash
 python rag_chat.py build
 ```
 
-### 2) 提问
+### 4.2 提问
 
 ```bash
 python rag_chat.py query "你的问题" --top-k 3
@@ -61,7 +61,7 @@ python rag_chat.py query "你的问题" --top-k 3
 
 top-k 参数用于控制使用前多少条检索结果增强回答。
 
-### 3) 裸大模型问答（无RAG、无检索）
+### 4.3 裸大模型问答（无RAG、无检索）
 
 ```bash
 python no_doc_chat.py "你的问题"
@@ -69,7 +69,7 @@ python no_doc_chat.py "你的问题"
 
 用于和 `python rag_chat.py query ...` 的 RAG 结果做直接对比。
 
-### 4) 将全部文档发送给大模型问答（无RAG、无检索）
+### 4.4 将全部文档发送给大模型问答（无RAG、无检索）
 
 ```bash
 python full_doc_chat.py "你的问题"
@@ -82,7 +82,7 @@ python full_doc_chat.py "你的问题"
 - 请求规模（chars/bytes/estimated_tokens）
 - GitHub Models/Copilot 的具体错误信息（若有）
 
-### 总体示例：
+### 4.5 总体示例
 
 ```bash
 export HF_ENDPOINT=https://hf-mirror.com
@@ -103,9 +103,9 @@ python rag_chat.py query "咖啡店营业时间是什么？" --top-k 3
 - 如果拿不到 token，则自动退化为“检索结果摘要”模式（仍可验证 RAG 检索链路）
 
 
-### 其它功能
+## 5 其它功能
 
-#### 量化算法
+### 5.1 量化算法
 
 系统支持了 IVF-Flat 与 IVF-PQ 两种索引，其中 IVF-PQ 使用了 PQ 压缩向量。为了便于对比两类索引的差异，系统提供了对比脚本：
 
