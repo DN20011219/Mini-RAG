@@ -112,7 +112,7 @@ class Embedder:
 		if sample_count > 0:
 			sample_indices = sorted(random.sample(range(len(chunks)), k=sample_count))
 			print(f"[Embedder] chunks={len(chunks)}, embedding_dim={embeddings.shape[1]}")
-			print("[Embedder] 样例输入与向量预览：")
+			print("[Embedder] Sample input and vector preview:")
 			for idx in sample_indices:
 				preview = text_inputs[idx][:100].replace("\n", " ")
 				vector_preview = np.array2string(embeddings[idx][:8], precision=4, separator=", ")

@@ -61,20 +61,20 @@ def load_all_documents(doc_dir: str | Path) -> str:
 		if not content:
 			continue
 		rel = file_path.relative_to(doc_dir)
-		parts.append(f"### 文件: {rel}\n{content}")
+		parts.append(f"### File: {rel}\n{content}")
 
 	return "\n\n".join(parts)
 
 
 def build_user_content(question: str, docs_content: str) -> str:
 	if not docs_content:
-		return f"问题：{question}\n\n文档内容为空，请直接基于常识回答并明确说明未提供文档。"
+		return f"Question: {question}\n\nDocument content is empty, please answer based on common sense and clearly state that no document was provided."
 
 	return (
-		f"请仅基于下面给出的完整文档内容回答问题。\n"
-		f"如果文档里没有答案，请明确说“文档中未找到”。\n\n"
-		f"问题：{question}\n\n"
-		f"完整文档内容：\n{docs_content}"
+		f"Please answer the question based only on the complete document content provided below.\n"
+		f"If the answer is not in the document, please clearly say 'Not found in document'.\n\n"
+		f"Question: {question}\n\n"
+		f"Complete Document Content:\n{docs_content}"
 	)
 
 
@@ -103,7 +103,7 @@ def _extract_error_message(response: requests.Response) -> str:
 def chat_with_github_models(user_content: str, system_prompt: str, model: str) -> tuple[str | None, str | None]:
 	token = get_github_token_from_gh()
 	if not token:
-		return None, "未检测到 GitHub token"
+		return None, "GitHub token not detected"
 
 	messages = [
 		{"role": "system", "content": system_prompt},
@@ -130,10 +130,10 @@ def chat_with_github_models(user_content: str, system_prompt: str, model: str) -
 	try:
 		data = response.json()
 	except Exception:
-		return None, "GitHub Models 返回了非 JSON 响应"
+		return None, "GitHub Models returned non-JSON response"
 	choices = data.get("choices", [])
 	if not choices:
-		return None, "GitHub Models 响应中没有 choices"
+		return None, "No choices in GitHub Models response"
 
 	choice = choices[0]
 	if isinstance(choice.get("message"), dict):
@@ -144,7 +144,7 @@ def chat_with_github_models(user_content: str, system_prompt: str, model: str) -
 def chat_with_copilot(user_content: str, system_prompt: str, model: str = "gpt-4o-mini") -> tuple[str | None, str | None]:
 	token = get_copilot_token()
 	if not token:
-		return None, "未检测到 Copilot token"
+		return None, "Copilot token not detected"
 
 	messages = [
 		{"role": "system", "content": system_prompt},
@@ -171,23 +171,23 @@ def chat_with_copilot(user_content: str, system_prompt: str, model: str = "gpt-4
 	try:
 		data = response.json()
 	except Exception:
-		return None, "Copilot 返回了非 JSON 响应"
+		return None, "Copilot returned non-JSON response"
 	choices = data.get("choices", [])
 	if not choices:
-		return None, "Copilot 响应中没有 choices"
+		return None, "No choices in Copilot response"
 	return choices[0].get("message", {}).get("content"), None
 
 
 def build_parser() -> argparse.ArgumentParser:
-	parser = argparse.ArgumentParser(description="裸大模型问答（无RAG、无检索）")
-	parser.add_argument("question", help="用户问题")
-	parser.add_argument("--model", default="openai/gpt-4.1-mini", help="GitHub Models 聊天模型")
+	parser = argparse.ArgumentParser(description="Raw LLM Q&A (No RAG, No Retrieval)")
+	parser.add_argument("question", help="User question")
+	parser.add_argument("--model", default="openai/gpt-4.1-mini", help="GitHub Models chat model")
 	parser.add_argument(
 		"--system",
-		default="你是一个文档问答助手，请严格根据给定文档回答。",
-		help="系统提示词",
+		default="You are a document Q&A assistant, please answer strictly based on the given document.",
+		help="System prompt",
 	)
-	parser.add_argument("--doc-dir", default="data/doc", help="文档目录（将全量拼接发送给模型）")
+	parser.add_argument("--doc-dir", default="data/doc", help="Document directory (will be fully concatenated and sent to model)")
 	return parser
 
 
@@ -207,8 +207,8 @@ def main() -> None:
 		print(answer)
 		return
 
-	print("全量文档直传模式调用失败。")
-	print(f"请求规模：chars={char_count}, bytes={byte_count}, estimated_tokens≈{estimated_tokens}")
+	print("Full document direct transfer mode call failed.")
+	print(f"Request scale: chars={char_count}, bytes={byte_count}, estimated_tokens≈{estimated_tokens}")
 	if gh_error:
 		print(f"- GitHub Models: {gh_error}")
 	if copilot_error:

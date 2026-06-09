@@ -10,8 +10,8 @@ try:
 	import faiss
 except Exception as exc:
 	raise ImportError(
-		"无法导入 faiss（由 faiss-cpu 提供）。请在 micro_rag 环境安装 faiss-cpu==1.10.0，"
-		"并使用 `conda run -n micro_rag python chat.py ...` 运行。"
+		"Cannot import faiss (provided by faiss-cpu). Please install faiss-cpu==1.10.0 in micro_rag environment, "
+		"and run with `conda run -n micro_rag python chat.py ...`."
 	) from exc
 
 from embedding import Chunk, Embedder
@@ -35,7 +35,7 @@ class VectorDB:
 		self.index_path = self.db_dir / index_name
 		self.metadata_path = self.db_dir / metadata_name
 		if index_type not in {"ivfflat", "ivfpq"}:
-			raise ValueError("index_type 仅支持 'ivfflat' 或 'ivfpq'")
+			raise ValueError("index_type only supports 'ivfflat' or 'ivfpq'")
 		self.index_type = index_type
 		self.nlist = nlist
 		self.nprobe = nprobe
@@ -54,7 +54,7 @@ class VectorDB:
 
 	def build(self, embeddings: np.ndarray, chunks: list[Chunk]) -> None:
 		if embeddings.size == 0 or not chunks:
-			raise ValueError("没有可建立索引的数据，请检查 data/ 是否有文本文件")
+			raise ValueError("No data to build index, please check if there are text files in data/")
 
 		embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
 		dim = embeddings.shape[1]
@@ -86,7 +86,7 @@ class VectorDB:
 
 	def save(self) -> None:
 		if self.index is None:
-			raise RuntimeError("索引不存在，请先 build")
+			raise RuntimeError("Index does not exist, please build first")
 
 		faiss.write_index(self.index, str(self.index_path))
 		self.metadata_path.write_text(
@@ -96,14 +96,14 @@ class VectorDB:
 
 	def load(self) -> None:
 		if not self.index_path.exists() or not self.metadata_path.exists():
-			raise FileNotFoundError("未找到索引文件，请先执行 build")
+			raise FileNotFoundError("Index file not found, please execute build first")
 
 		self.index = faiss.read_index(str(self.index_path))
 		self.metadata = json.loads(self.metadata_path.read_text(encoding="utf-8"))
 
 	def search(self, query_vector: np.ndarray, top_k: int = 3) -> list[dict]:
 		if self.index is None:
-			raise RuntimeError("索引未加载")
+			raise RuntimeError("Index not loaded")
 
 		if hasattr(self.index, "nprobe"):
 			self.index.nprobe = max(1, min(self.nprobe, self.index.nlist))

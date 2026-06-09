@@ -60,11 +60,11 @@ def generate_with_github_models(question: str, contexts: list[dict], model: str 
 	messages = [
 		{
 			"role": "system",
-			"content": "你是一个RAG问答助手。仅基于给定上下文回答，若上下文不足请明确说明。",
+			"content": "You are a RAG Q&A assistant. Answer only based on the given context, and clearly state if the context is insufficient.",
 		},
 		{
 			"role": "user",
-			"content": f"问题：{question}\n\n检索上下文：\n{context_text}",
+			"content": f"Question: {question}\n\nRetrieved Context:\n{context_text}",
 		},
 	]
 
@@ -110,11 +110,11 @@ def generate_with_copilot(question: str, contexts: list[dict], model: str = "gpt
 	messages = [
 		{
 			"role": "system",
-			"content": "你是一个RAG问答助手。仅基于给定上下文回答，若上下文不足请明确说明为什么。",
+			"content": "You are a RAG Q&A assistant. Answer only based on the given context, and clearly explain why if the context is insufficient.",
 		},
 		{
 			"role": "user",
-			"content": f"问题：{question}\n\n检索上下文：\n{context_text}",
+			"content": f"Question: {question}\n\nRetrieved Context:\n{context_text}",
 		},
 	]
 
@@ -142,20 +142,20 @@ def generate_with_copilot(question: str, contexts: list[dict], model: str = "gpt
 
 
 def fallback_answer(question: str, contexts: list[dict]) -> str:
-	lines = [f"问题：{question}", "", "以下是最相关内容："]
+	lines = [f"Question: {question}", "", "Here is the most relevant content:"]
 	for idx, item in enumerate(contexts, start=1):
-		preview = (item.get("content") or "<图片内容>")[:180]
+		preview = (item.get("content") or "<image content>")[:180]
 		lines.append(f"{idx}. {item['source']} (score={item['score']:.4f})")
 		lines.append(f"   {preview}")
 	lines.append("")
-	lines.append("未检测到可用 GitHub Models/Copilot token，已返回检索结果摘要。")
+	lines.append("No available GitHub Models/Copilot token detected, returning retrieval result summary.")
 	return "\n".join(lines)
 
 
 def print_retrieval_results(contexts: list[dict]) -> None:
-	print("检索结果：")
+	print("Retrieval Results:")
 	for idx, item in enumerate(contexts, start=1):
-		preview = (item.get("content") or "<图片内容>")[:180]
+		preview = (item.get("content") or "<image content>")[:180]
 		print(f"{idx}. {item['source']} (score={item['score']:.4f})")
 		print(f"   {preview}")
 	print("")
@@ -203,14 +203,14 @@ def cmd_build(args: argparse.Namespace) -> None:
 		hf_endpoint=args.hf_endpoint,
 		local_files_only=args.local_files_only,
 	)
-	print(f"建库完成: chunks={total_chunks}, embedding_dim={dim}, db={Path(args.db_dir).resolve()}")
+	print(f"Build completed: chunks={total_chunks}, embedding_dim={dim}, db={Path(args.db_dir).resolve()}")
 
 
 def cmd_query(args: argparse.Namespace) -> None:
 	from embedding import Embedder
 	from vectordb import VectorDB
 	
-	print("数据库与嵌入模型加载中...")
+	print("Loading database and embedding model...")
 	vectordb = VectorDB(db_dir=args.db_dir)
 	vectordb.load()
 	embedder = Embedder(
@@ -218,21 +218,21 @@ def cmd_query(args: argparse.Namespace) -> None:
 		hf_endpoint=args.hf_endpoint,
 		local_files_only=args.local_files_only,
 	)
-	print("加载完成...")
+	print("Loading completed...")
 	
-	print("嵌入query中...")
+	print("Embedding query...")
 	query_vector = embedder.embed_query(args.question)
 
-	print("向量数据库检索中...")
+	print("Retrieving from vector database...")
 	candidate_k = max(args.top_k * 8, 20)
 	candidates = vectordb.search(query_vector=query_vector, top_k=candidate_k)
 	contexts = rerank_contexts(args.question, candidates, top_k=args.top_k)
 	if not contexts:
-		print("未检索到相关内容")
+		print("No relevant content retrieved")
 		return
 	print_retrieval_results(contexts)
 
-	print("增强回答中，请稍候...")
+	print("Generating enhanced answer, please wait...")
 	answer = generate_with_github_models(args.question, contexts, model=args.model)
 	if not answer:
 		answer = generate_with_copilot(args.question, contexts, model="gpt-4o-mini")
@@ -243,48 +243,48 @@ def cmd_query(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-	parser = argparse.ArgumentParser(description="最简 RAG 系统")
+	parser = argparse.ArgumentParser(description="Minimal RAG System")
 	subparsers = parser.add_subparsers(dest="command", required=True)
 
-	build_parser = subparsers.add_parser("build", help="构建向量库")
-	build_parser.add_argument("--data-dir", default="data", help="数据目录（仅文本）")
-	build_parser.add_argument("--db-dir", default="data/db_file", help="向量库存储目录")
+	build_parser = subparsers.add_parser("build", help="Build vector database")
+	build_parser.add_argument("--data-dir", default="data", help="Data directory (text only)")
+	build_parser.add_argument("--db-dir", default="data/db_file", help="Vector database storage directory")
 	build_parser.add_argument(
 		"--model-name",
 		default="sentence-transformers/clip-ViT-B-32-multilingual-v1",
-		help="Embedding 模型名称或本地模型路径",
+		help="Embedding model name or local model path",
 	)
 	build_parser.add_argument(
 		"--hf-endpoint",
 		default=os.getenv("HF_ENDPOINT"),
-		help="Hugging Face 访问地址（如 https://hf-mirror.com）",
+		help="Hugging Face endpoint (e.g., https://hf-mirror.com)",
 	)
 	build_parser.add_argument(
 		"--local-files-only",
 		action="store_true",
-		help="仅从本地缓存/路径加载模型，不访问网络",
+		help="Only load model from local cache/path, no network access",
 	)
 	build_parser.set_defaults(func=cmd_build)
 
-	query_parser = subparsers.add_parser("query", help="检索并回答")
-	query_parser.add_argument("question", help="用户问题")
-	query_parser.add_argument("--db-dir", default="data/db_file", help="向量库存储目录")
-	query_parser.add_argument("--top-k", type=int, default=3, help="召回条数")
-	query_parser.add_argument("--model", default="openai/gpt-4.1-mini", help="GitHub Models 聊天模型")
+	query_parser = subparsers.add_parser("query", help="Retrieve and answer")
+	query_parser.add_argument("question", help="User question")
+	query_parser.add_argument("--db-dir", default="data/db_file", help="Vector database storage directory")
+	query_parser.add_argument("--top-k", type=int, default=3, help="Number of results to retrieve")
+	query_parser.add_argument("--model", default="openai/gpt-4.1-mini", help="GitHub Models chat model")
 	query_parser.add_argument(
 		"--model-name",
 		default="sentence-transformers/clip-ViT-B-32-multilingual-v1",
-		help="Embedding 模型名称或本地模型路径",
+		help="Embedding model name or local model path",
 	)
 	query_parser.add_argument(
 		"--hf-endpoint",
 		default=os.getenv("HF_ENDPOINT"),
-		help="Hugging Face 访问地址（如 https://hf-mirror.com）",
+		help="Hugging Face endpoint (e.g., https://hf-mirror.com)",
 	)
 	query_parser.add_argument(
 		"--local-files-only",
 		action="store_true",
-		help="仅从本地缓存/路径加载模型，不访问网络",
+		help="Only load model from local cache/path, no network access",
 	)
 	query_parser.set_defaults(func=cmd_query)
 

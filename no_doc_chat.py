@@ -114,13 +114,13 @@ def chat_with_copilot(question: str, system_prompt: str, model: str = "gpt-4o-mi
 
 
 def build_parser() -> argparse.ArgumentParser:
-	parser = argparse.ArgumentParser(description="裸大模型问答（无RAG、无检索）")
-	parser.add_argument("question", help="用户问题")
-	parser.add_argument("--model", default="openai/gpt-4.1-mini", help="GitHub Models 聊天模型")
+	parser = argparse.ArgumentParser(description="Raw LLM Q&A (No RAG, No Retrieval)")
+	parser.add_argument("question", help="User question")
+	parser.add_argument("--model", default="openai/gpt-4.1-mini", help="GitHub Models chat model")
 	parser.add_argument(
 		"--system",
-		default="你是一个有帮助的助手，请直接回答用户问题。",
-		help="系统提示词",
+		default="You are a helpful assistant, please answer user questions directly.",
+		help="System prompt",
 	)
 	return parser
 
@@ -137,7 +137,7 @@ def main() -> None:
 		print(answer)
 		return
 
-	print("未检测到可用 GitHub Models/Copilot token，无法进行裸大模型问答。")
+	print("No available GitHub Models/Copilot token detected, unable to perform raw LLM Q&A.")
 
 
 if __name__ == "__main__":

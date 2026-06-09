@@ -1,20 +1,20 @@
-# 一个最简单的 RAG 系统
+# A Minimal RAG System
 
-## 1 系统设计
+## 1 System Design
 
-- LLM 接入：优先使用 GitHub API（GitHub Models，读取 `gh auth login` 登录态 token）调用对话接口；不可用时回退 Copilot token
-- Embedding：对 `data/doc` 下文本做向量化
-- VectorDB：使用 `faiss`，索引与元数据保存在 `data/db_file/`，索引默认使用 IVF-PQ，距离度量采用 METRIC_INNER_PRODUCT
+- LLM Integration: Preferentially use GitHub API (GitHub Models, reading token from `gh auth login` login state) to call chat interface; fallback to Copilot token when unavailable
+- Embedding: Vectorize text files under `data/doc`
+- VectorDB: Use `faiss`, index and metadata saved in `data/db_file/`, index defaults to IVF-PQ, distance metric uses METRIC_INNER_PRODUCT
 
-## 2 环境依赖
+## 2 Environment Dependencies
 
-使用 conda 管理虚拟环境，可跳过（推荐）：
+Use conda to manage virtual environment, can be skipped (recommended):
 ```bash
 conda create -n micro_rag
 conda activate micro_rag
 ```
 
-安装 python 依赖：
+Install Python dependencies:
 ```bash
 pip install \
   numpy==1.26.4 \
@@ -23,7 +23,7 @@ pip install \
   requests==2.32.3
 ```
 
-安装 GitHub CLI 并登录（用于 Copilot token）：
+Install GitHub CLI and login (for Copilot token):
 
 ```bash
 sudo apt install gh
@@ -31,98 +31,98 @@ gh auth login
 gh auth status --show-token -h github.com
 ```
 
-国内网络可优先使用 Hugging Face 镜像下载嵌入模型：
+For users in China, prefer using Hugging Face mirror to download embedding models:
 
 ```bash
 export HF_ENDPOINT=https://hf-mirror.com
 ```
 
-也可直接在命令中传入：`--hf-endpoint https://hf-mirror.com`。
+Or pass directly in command: `--hf-endpoint https://hf-mirror.com`.
 
-若模型已提前下载到本地，可使用本地模式：`--local-files-only --model-name <本地模型目录>`。
+If model is already downloaded locally, use local mode: `--local-files-only --model-name <local model directory>`.
 
-## 3 数据准备
+## 3 Data Preparation
 
-- 把所有文本数据放到 `data/doc`（支持 `.txt/.md/.markdown`）
+- Place all text data in `data/doc` (supports `.txt/.md/.markdown`)
 
-## 4 运行指南
+## 4 Running Guide
 
-### 4.1 建库
+### 4.1 Build Database
 
 ```bash
 python rag_chat.py build
 ```
 
-### 4.2 提问
+### 4.2 Query
 
 ```bash
-python rag_chat.py query "你的问题" --top-k 3
+python rag_chat.py query "Your question here" --top-k 3
 ```
 
-top-k 参数用于控制使用前多少条检索结果增强回答。
+The top-k parameter controls how many retrieved results are used to enhance the answer.
 
-### 4.3 裸大模型问答（无RAG、无检索）
+### 4.3 Raw LLM Q&A (No RAG, No Retrieval)
 
 ```bash
-python no_doc_chat.py "你的问题"
+python no_doc_chat.py "Your question here"
 ```
 
-用于和 `python rag_chat.py query ...` 的 RAG 结果做直接对比。
+Used for direct comparison with RAG results from `python rag_chat.py query ...`.
 
-### 4.4 将全部文档发送给大模型问答（无RAG、无检索）
+### 4.4 Send All Documents to LLM Q&A (No RAG, No Retrieval)
 
 ```bash
-python full_doc_chat.py "你的问题"
+python full_doc_chat.py "Your question here"
 ```
 
-该脚本用于演示“全量文档直传”的典型问题：当文档过长时，接口容易因上下文超限而报错。
+This script demonstrates the typical problem of "full document direct transfer": when documents are too long, the interface may error due to context length limits.
 
-脚本会打印：
+The script prints:
 
-- 请求规模（chars/bytes/estimated_tokens）
-- GitHub Models/Copilot 的具体错误信息（若有）
+- Request scale (chars/bytes/estimated_tokens)
+- Specific error messages from GitHub Models/Copilot (if any)
 
-### 4.5 总体示例
+### 4.5 Overall Example
 
 ```bash
 export HF_ENDPOINT=https://hf-mirror.com
 python rag_chat.py build
-python full_doc_chat.py "咖啡店营业时间是什么？"
-python rag_chat.py query "咖啡店营业时间是什么？" --top-k 3
+python full_doc_chat.py "What are the coffee shop business hours?"
+python rag_chat.py query "What are the coffee shop business hours?" --top-k 3
 ```
 
-上面这组命令可直接作为教学演示：
+This set of commands can be directly used as a teaching demonstration:
 
-1. 先运行 `full_doc_chat.py`，观察长文档直传时的失败信息。
-2. 再运行 `rag_chat.py query`，观察“检索后再生成”的稳定回答。
+1. First run `full_doc_chat.py`, observe the failure information when passing long documents directly.
+2. Then run `rag_chat.py query`, observe the stable answer of "retrieve then generate".
 
-额外说明：
+Additional notes:
 
-- 如果当前机器可通过 GitHub 登录态拿到 token，则会优先调用 GitHub Models 生成最终答案
-- 如果 GitHub Models 不可用，会尝试 Copilot token
-- 如果拿不到 token，则自动退化为“检索结果摘要”模式（仍可验证 RAG 检索链路）
+- If the current machine can obtain token via GitHub login state, it will preferentially call GitHub Models to generate the final answer
+- If GitHub Models is unavailable, it will try Copilot token
+- If no token is available, it automatically degrades to "retrieval result summary" mode (still can verify RAG retrieval pipeline)
 
 
-## 5 其它功能
+## 5 Other Features
 
-### 5.1 量化算法
+### 5.1 Quantization Algorithms
 
-系统支持了 IVF-Flat 与 IVF-PQ 两种索引，其中 IVF-PQ 使用了 PQ 压缩向量。为了便于对比两类索引的差异，系统提供了对比脚本：
+The system supports IVF-Flat and IVF-PQ indexes, where IVF-PQ uses PQ compressed vectors. To facilitate comparison of differences between these two indexes, the system provides a comparison script:
 
 ```bash
 python compare_index.py
 ```
 
-该脚本将根据 doc 内部文档和切分嵌入模块，构建 IVF-Flat 和 IVF-PQ 两类索引，并输出这两类索引的磁盘空间。
+This script will build IVF-Flat and IVF-PQ indexes based on documents in doc and the chunk embedding module, and output the disk space of these two indexes.
 
-当前版本会在同一查询集上同时对比两项指标：
+The current version simultaneously compares two metrics on the same query set:
 
-- 数据库层召回：以 `IndexFlatIP` 精确检索的 top-k 作为基准，计算 `IVF-Flat` 和 `IVF-PQ` 的 `avg_recall_at_k`
-- 索引存储空间：输出两类索引文件大小（bytes）、压缩比例（`ivfpq_ratio`）与节省空间（`saved_bytes`）
+- Database layer recall: Using top-k from `IndexFlatIP` exact retrieval as baseline, calculate `avg_recall_at_k` for `IVF-Flat` and `IVF-PQ`
+- Index storage space: Output index file sizes (bytes) for both indexes, compression ratio (`ivfpq_ratio`) and saved space (`saved_bytes`)
 
-说明：`pq_m` 为 `null` 表示使用默认策略（按向量维度自动设置为 `dim // 8`，再做可整除修正）。`pq_nbits` 默认每个子空间使用 8 bit 存储。
+Note: `pq_m` as `null` means using default strategy (automatically set to `dim // 8` based on vector dimension, with divisibility correction). `pq_nbits` defaults to 8 bits storage per subspace.
 
-如默认实验配置下，测试结果为：
+Under default experimental configuration, test results are:
 ```json
 {
   "query_count": 7,
@@ -148,12 +148,12 @@ python compare_index.py
 }
 ```
 
-其含义为：
+This means:
 
-- 一共评测了 7 个查询问题（`query_count=7`），每次比较 top-3 结果（`top_k=3`）。
-- 倒排参数为 `nlist=50`、`nprobe=30`；`pq_m=null` 表示自动按 `dim // 8` 设定子空间数，`pq_nbits=8` 表示每个子空间 8 bit 编码。
-- `ivfflat_index_bytes=1357099` 与 `ivfpq_index_bytes=671188` 表示两类索引文件大小；`ivfpq_ratio=0.494576` 表示 IVF-PQ 大小约为 IVF-Flat 的 49.46%。
-- `saved_bytes=685911` 表示 IVF-PQ 相比 IVF-Flat 节省约 686 KB 存储空间。
-- `avg_recall_at_k` 表示数据库层平均召回：IVF-Flat 为 `1.0`（与精确检索 top-k 一致），IVF-PQ 为 `0.8571`（平均能命中约 85.71% 的精确检索 top-k）。
+- Evaluated 7 query problems in total (`query_count=7`), comparing top-3 results each time (`top_k=3`).
+- Inverted index parameters are `nlist=50`, `nprobe=30`; `pq_m=null` means automatically setting subspace count based on `dim // 8`, `pq_nbits=8` means 8-bit encoding per subspace.
+- `ivfflat_index_bytes=1357099` and `ivfpq_index_bytes=671188` represent index file sizes for both types; `ivfpq_ratio=0.494576` means IVF-PQ size is approximately 49.46% of IVF-Flat.
+- `saved_bytes=685911` means IVF-PQ saves approximately 686 KB storage space compared to IVF-Flat.
+- `avg_recall_at_k` represents database layer average recall: IVF-Flat is `1.0` (consistent with exact retrieval top-k), IVF-PQ is `0.8571` (can hit approximately 85.71% of exact retrieval top-k on average).
 
-这说明在当前数据规模与参数下，IVF-PQ 显著降低了索引体积，但会带来一定召回损失；可通过调大 `nprobe`、降低压缩强度（如减小 `pq_nbits` 或调整 `pq_m`）进一步权衡。
+This shows that under current data scale and parameters, IVF-PQ significantly reduces index volume, but brings certain recall loss; can further trade off by increasing `nprobe`, reducing compression intensity (e.g., decreasing `pq_nbits` or adjusting `pq_m`).

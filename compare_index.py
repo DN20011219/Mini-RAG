@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import time
 from pathlib import Path
 
 import numpy as np
@@ -14,7 +15,7 @@ try:
     import faiss
 except Exception as exc:
     raise ImportError(
-        "无法导入 faiss（由 faiss-cpu 提供）。请先安装 faiss-cpu==1.10.0。"
+        "Cannot import faiss (provided by faiss-cpu). Please install faiss-cpu==1.10.0 first."
     ) from exc
 
 
@@ -62,14 +63,14 @@ def _collect_contexts_from_search(
 
 def compare_recall_only(
     data_dir: str | Path = "data",
-    question_file: str | Path = "提问题库.md",
+    question_file: str | Path = "questions.md",
     db_root_dir: str | Path = "data",
     model_name: str = "sentence-transformers/clip-ViT-B-32-multilingual-v1",
     hf_endpoint: str | None = None,
     local_files_only: bool = False,
     top_k: int = 3,
     nlist: int = 50,
-    nprobe: int = 30,
+    nprobe: int = 1,
     pq_m: int | None = None,
     pq_nbits: int = 8,
 ) -> dict:
@@ -79,7 +80,7 @@ def compare_recall_only(
 
     queries = _extract_queries_from_markdown(question_file)
     if not queries:
-        raise ValueError(f"未在 {question_file} 里解析到 rag_chat.py query 问题")
+        raise ValueError(f"No rag_chat.py query questions parsed from {question_file}")
 
     embedder = Embedder(
         model_name=model_name,
@@ -124,6 +125,7 @@ def compare_recall_only(
 
     per_query: list[dict] = []
     avg_recall = {"ivfflat": [], "ivfpq": []}
+    avg_latency_ms = {"ivfflat": [], "ivfpq": []}
 
     for query in queries:
         query_vector = _embed_query(embedder, query)
@@ -137,13 +139,17 @@ def compare_recall_only(
         }
 
         for index_name, db in db_map.items():
+            start_ts = time.perf_counter()
             contexts = db.search(query_vector=query_vector, top_k=top_k)
+            latency_ms = (time.perf_counter() - start_ts) * 1000.0
             recall_k = _recall_at_k(exact_contexts, contexts)
 
             avg_recall[index_name].append(recall_k)
+            avg_latency_ms[index_name].append(latency_ms)
 
             query_result["index_results"][index_name] = {
                 "recall_at_k": round(recall_k, 4),
+                "latency_ms": round(latency_ms, 3),
                 "topk_chunk_ids": [item["chunk_id"] for item in contexts],
             }
 
@@ -168,9 +174,11 @@ def compare_recall_only(
         "summary": {
             "ivfflat": {
                 "avg_recall_at_k": round(_mean(avg_recall["ivfflat"]), 4),
+                "avg_latency_ms": round(_mean(avg_latency_ms["ivfflat"]), 3),
             },
             "ivfpq": {
                 "avg_recall_at_k": round(_mean(avg_recall["ivfpq"]), 4),
+                "avg_latency_ms": round(_mean(avg_latency_ms["ivfpq"]), 3),
             },
         },
         "per_query": per_query,
@@ -178,20 +186,20 @@ def compare_recall_only(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="同一查询集下比较 IVFFlat vs IVFPQ 的数据库召回")
+    parser = argparse.ArgumentParser(description="Compare database recall between IVFFlat vs IVFPQ on the same query set")
     parser.add_argument("--data-dir", default="data")
-    parser.add_argument("--question-file", default="提问题库.md")
+    parser.add_argument("--question-file", default="questions.md")
     parser.add_argument("--db-root-dir", default="data")
     parser.add_argument(
         "--model-name",
         default="sentence-transformers/clip-ViT-B-32-multilingual-v1",
-        help="Embedding 模型名称或本地模型路径",
+        help="Embedding model name or local model path",
     )
     parser.add_argument("--hf-endpoint", default=None)
     parser.add_argument("--local-files-only", action="store_true")
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--nlist", type=int, default=50)
-    parser.add_argument("--nprobe", type=int, default=30)
+    parser.add_argument("--nprobe", type=int, default=5)
     parser.add_argument("--pq-m", type=int, default=None)
     parser.add_argument("--pq-nbits", type=int, default=8)
     return parser

@@ -1,0 +1,4 @@
+data/db_file
+data/db_file_ivfflat
+data/db_file_ivfpq
+__pycache__
